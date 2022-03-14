@@ -44,11 +44,15 @@ if __name__ == "__main__":
         with gzip.open(FILEPATH.format(IN_PATH, cat)) as f:
             for l in f:
                 row = json.loads(l.strip())
-                title = row.get("title", "")
                 if ("getTime" in title) or (title == ""):
-                    pass
+                    continue
+                
+                if not row.get("imageURL"):
+                    continue
+
                 row['perCategory'] = cat
                 data.append(row)
+                
                 if len(data) > 2000:
                     break
             for ix, r in enumerate(data):
