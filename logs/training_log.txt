@@ -1,0 +1,1 @@
+Epoch train: [0/14], Step train: [1/93], Loss train: 8.3331, Perplexity train: 4159.4038
