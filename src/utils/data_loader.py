@@ -12,6 +12,7 @@ from typing import Union
 import skimage.io as io
 from PIL import Image
 import torch.utils.data as data
+import time
 
 from src.utils.vocabulary import Vocabulary
 
@@ -125,6 +126,7 @@ class myDataset(data.Dataset):
       # get an image name, like 'https://images-na.ssl-images-amazon.com/images/I/41WGCY65ENL._US40_.jpg'
       # Convert image to tensor and pre-process using transform
       # we open specified image and convert it to RGB
+      time.sleep(0.01)
       image = Image.fromarray(io.imread(img_url)).convert('RGB')
       # specified image transformer - the way we want to augment/modify image
       image = self.transform(image)
@@ -144,6 +146,7 @@ class myDataset(data.Dataset):
       # Convert image to tensor and pre-process using transform           
       caption = self.caption_dict[index]
       img_url = self.image_dict[index]
+      time.sleep(0.01)
       image = Image.fromarray(io.imread(img_url)).convert('RGB')
       image = self.transform(image)
       
@@ -161,8 +164,9 @@ class myDataset(data.Dataset):
     elif self.mode == 'test':
       img_url = self.image_dict[index]
       # Convert image to tensor and pre-process using transform
-      orig_image = Image.fromarray(io.imread(img_url)).convert('RGB')
-      image = self.transform(orig_image)
+      PIL_image = Image.fromarray(io.imread(img_url)).convert('RGB')
+      orig_image = np.array(PIL_image)
+      image = self.transform(PIL_image)
       # return original image and pre-processed image tensor
       return orig_image, image
 
