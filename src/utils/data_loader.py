@@ -21,6 +21,7 @@ def get_loader(
   transform,
   mode='train',
   # default batch size
+  image_type="imageURL",
   batch_size=1,
   vocab_threshold=None,
   vocab_file='./assets/vocab.pkl',
@@ -60,7 +61,7 @@ def get_loader(
     assert os.path.exists(vocab_file), "Must first generate vocab.pkl from training data."
     assert vocab_from_file==True, "Change vocab_from_file to True."
   
-  image_dict = source["imageURL"].to_dict()
+  image_dict = source[image_type].to_dict()
   caption_dict = source["title"].to_dict()
   dataset= myDataset(
     image_dict, 

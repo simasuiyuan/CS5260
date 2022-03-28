@@ -42,6 +42,15 @@ class DecoderRNN(nn.Module):
         # Source: https://arxiv.org/pdf/1502.03044.pdf
         self.init_h = nn.Linear(num_features, hidden_dim)
         self.init_c = nn.Linear(num_features, hidden_dim)
+        self.init_weights()
+
+    def init_weights(self):
+        """
+        Initializes some parameters with values from the uniform distribution, for easier convergence.
+        """
+        self.embedding.weight.data.uniform_(-0.1, 0.1)
+        self.fc.bias.data.fill_(0)
+        self.fc.weight.data.uniform_(-0.1, 0.1)
 
     def forward(self, captions, features, sample_prob = 0.0):
         """Arguments
