@@ -12,6 +12,7 @@ from typing import Union
 import skimage.io as io
 from PIL import Image
 import torch.utils.data as data
+from sklearn.preprocessing import OneHotEncoder
 import time
 
 from src.utils.vocabulary import Vocabulary
@@ -22,6 +23,8 @@ def get_loader(
   mode='train',
   # default batch size
   image_type="imageURL",
+  caption_type="description",
+  sentence_index = "sentence_index",
   batch_size=1,
   vocab_threshold=None,
   vocab_file='./assets/vocab.pkl',
@@ -62,10 +65,17 @@ def get_loader(
     assert vocab_from_file==True, "Change vocab_from_file to True."
   
   image_dict = source[image_type].to_dict()
-  caption_dict = source["title"].to_dict()
+  caption_dict = source[caption_type].to_dict()
+  category_dict = source["perCategory"].to_dict()
+  if sentence_index in source.columns:
+        sentence_id_dict = source["sentence_index"].to_dict()
+  else:
+        sentence_id_dict = None
+
   dataset= myDataset(
     image_dict, 
-    caption_dict, 
+    caption_dict,
+    category_dict,
     transform, 
     mode, 
     batch_size, 
@@ -74,7 +84,8 @@ def get_loader(
     start_word, 
     end_word, 
     unk_word, 
-    vocab_from_file)
+    vocab_from_file,
+    sentence_id_dict=sentence_id_dict)
 
   if mode == 'train' or mode == 'valid':
       # Randomly sample a caption length and indices of that length
@@ -96,16 +107,24 @@ def get_loader(
   return data_loader
 
 class myDataset(data.Dataset):
-  def __init__(self, image_dict, caption_dict, transform, mode, batch_size, vocab_threshold, vocab_file, start_word, end_word, unk_word, vocab_from_file):
+  def __init__(self, image_dict, caption_dict, category_dict, transform, 
+  mode, batch_size, vocab_threshold, vocab_file, start_word, 
+  end_word, unk_word, vocab_from_file,sentence_id_dict=None):
     self.image_dict = image_dict
     self.caption_dict = caption_dict
+    self.category_dict = category_dict
+    self.sentence_id_dict = sentence_id_dict
+    #onehot encode the category data
+    self.onehot_enc_cat = OneHotEncoder(handle_unknown='ignore').fit(np.array([*category_dict.values()], dtype=object).reshape(-1, 1))
+    if sentence_id_dict is not None:
+          self.onehot_enc_seq = OneHotEncoder(handle_unknown='ignore').fit(np.array([*sentence_id_dict.values()], dtype=object).reshape(-1, 1))
+          
     self.transform = transform
     self.mode = mode
     self.batch_size = batch_size
     self.vocab = Vocabulary(caption_dict, vocab_threshold, vocab_file, start_word,
                             end_word, unk_word, vocab_from_file)
     # self.img_folder = img_folder
-
     # if training and validation
     if self.mode == 'train' or self.mode == 'valid':
       self.ids = list(caption_dict.keys())
@@ -114,6 +133,7 @@ class myDataset(data.Dataset):
       all_tokens = [nltk.tokenize.word_tokenize(str(caption_dict[index]).lower()) for index in tqdm(np.arange(len(self.ids)))]
       # list of token lengths (number of words for each caption)
       self.caption_lengths = [len(token) for token in all_tokens]
+      
 
   def __getitem__(self, index):
     # obtain image and caption if in training mode
@@ -132,6 +152,16 @@ class myDataset(data.Dataset):
       # specified image transformer - the way we want to augment/modify image
       image = self.transform(image)
 
+      # image pre-processed with tranformer applied
+      onehot_cat = torch.Tensor(self.onehot_enc_cat.transform(
+        np.array(self.category_dict[index], 
+        dtype=object).reshape(-1, 1)).toarray()).long()
+      
+      if self.sentence_id_dict is not None:
+            onehot_seq = torch.Tensor(self.onehot_enc_seq.transform(
+              np.array(self.sentence_id_dict[index], 
+                       dtype=object).reshape(-1, 1)).toarray()).long()
+
       # Convert caption to tensor of word ids.
       tokens = nltk.tokenize.word_tokenize(str(caption).lower())
       caption = []
@@ -140,8 +170,8 @@ class myDataset(data.Dataset):
       caption.append(self.vocab(self.vocab.end_word))
       caption = torch.Tensor(caption).long()
       # return pre-processed image and caption tensors
-      # image pre-processed with tranformer applied
-      return image, caption
+      return image, onehot_cat, onehot_seq, caption
+
     # obtain image if in test mode
     elif self.mode == 'valid':
       # Convert image to tensor and pre-process using transform           
@@ -151,6 +181,15 @@ class myDataset(data.Dataset):
       image = Image.fromarray(io.imread(img_url)).convert('RGB')
       image = self.transform(image)
       
+      onehot_cat = torch.Tensor(self.onehot_enc_cat.transform(
+        np.array(self.category_dict[index], 
+        dtype=object).reshape(-1, 1)).toarray()).long()
+      
+      if self.sentence_id_dict is not None:
+            onehot_seq = torch.Tensor(self.onehot_enc_seq.transform(
+              np.array(self.sentence_id_dict[index], 
+                       dtype=object).reshape(-1, 1)).toarray()).long()
+
       # Convert caption to tensor of word ids.
       tokens = nltk.tokenize.word_tokenize(str(caption).lower())
       caption = []
@@ -161,15 +200,26 @@ class myDataset(data.Dataset):
       # retrun all captions for image (will be required for calculating BLEU score)
       caps_all = list(self.caption_dict.values())
       # return original image and pre-processed image tensor
-      return image, caption, caps_all
+      return image, onehot_cat, onehot_seq, caption, caps_all
+
     elif self.mode == 'test':
       img_url = self.image_dict[index]
+      caption = self.caption_dict[index]
       # Convert image to tensor and pre-process using transform
       PIL_image = Image.fromarray(io.imread(img_url)).convert('RGB')
       orig_image = np.array(PIL_image)
       image = self.transform(PIL_image)
+      
+      onehot_cat = torch.Tensor(self.onehot_enc_cat.transform(
+        np.array(self.category_dict[index], 
+        dtype=object).reshape(-1, 1)).toarray()).long()
+      
+      if self.sentence_id_dict is not None:
+            onehot_seq = torch.Tensor(self.onehot_enc_seq.transform(
+              np.array(self.sentence_id_dict[index], 
+                       dtype=object).reshape(-1, 1)).toarray()).long()
       # return original image and pre-processed image tensor
-      return orig_image, image
+      return orig_image, image, onehot_cat, onehot_seq, caption
 
   def get_indices(self):
     # randomly select the caption length from the list of lengths

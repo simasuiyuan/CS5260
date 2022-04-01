@@ -14,11 +14,12 @@ class DecoderRNN(nn.Module):
     - vocab_size - size of vocabulary
     - p - dropout probability
     """
-    def __init__(self, num_features, embedding_dim, hidden_dim, vocab_size, p =0.5):
+    def __init__(self, num_features, embedding_dim, category_dim, hidden_dim, vocab_size, p =0.5):
         super(DecoderRNN, self).__init__()
 
         self.num_features = num_features
         self.embedding_dim = embedding_dim
+        self.category_dim = category_dim
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
         # scale the inputs to softmax
@@ -29,7 +30,7 @@ class DecoderRNN(nn.Module):
         # LSTM will have a single layer of size 512 (512 hidden units)
         # it will input concatinated context vector (produced by attention)
         # and corresponding hidden state of Decoder
-        self.lstm = nn.LSTMCell(embedding_dim + num_features, hidden_dim)
+        self.lstm = nn.LSTMCell(embedding_dim + num_features + category_dim, hidden_dim)
         # produce the final output
         self.fc = nn.Linear(hidden_dim, vocab_size)
 
@@ -48,11 +49,11 @@ class DecoderRNN(nn.Module):
         """
         Initializes some parameters with values from the uniform distribution, for easier convergence.
         """
-        self.embedding.weight.data.uniform_(-0.1, 0.1)
+        self.embeddings.weight.data.uniform_(-0.1, 0.1)
         self.fc.bias.data.fill_(0)
         self.fc.weight.data.uniform_(-0.1, 0.1)
 
-    def forward(self, captions, features, sample_prob = 0.0):
+    def forward(self, captions, features, category_enc, sample_prob = 0.0):
         """Arguments
         ----------
         - captions - image captions
@@ -83,7 +84,7 @@ class DecoderRNN(nn.Module):
                 word_embed = embed[:,t,:]
             context, atten_weight = self.attention(features, h)
             # input_concat shape at time step t = (batch, embedding_dim + hidden_dim)
-            input_concat = torch.cat([word_embed, context], 1)
+            input_concat = torch.cat([word_embed, context, category_enc], 1)
             h, c = self.lstm(input_concat, (h,c))
             h = self.drop(h)
             output = self.fc(h)
@@ -114,7 +115,7 @@ class DecoderRNN(nn.Module):
         return h0, c0
 
 
-    def greedy_search(self, features, max_sentence = 20):
+    def greedy_search(self, features, category_enc, max_sentence = 20):
 
         """Greedy search to sample top candidate from distribution.
         Arguments
@@ -134,7 +135,7 @@ class DecoderRNN(nn.Module):
             embedded_word = self.embeddings(input_word)
             context, atten_weight = self.attention(features, h)
             # input_concat shape at time step t = (batch, embedding_dim + context size)
-            input_concat = torch.cat([embedded_word, context],  dim = 1)
+            input_concat = torch.cat([embedded_word, context, category_enc],  dim = 1)
             h, c = self.lstm(input_concat, (h,c))
             h = self.drop(h)
             output = self.fc(h)

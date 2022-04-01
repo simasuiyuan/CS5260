@@ -1,4 +1,5 @@
 #%%
+from traceback import print_tb
 import numpy as np
 import pandas as pd
 import skimage.io as io
@@ -11,11 +12,11 @@ from tqdm import tqdm
 from pathlib import Path
 tqdm.pandas()
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings('ignore')
 # nltk.download('stopwords')
 # nltk.download('punkt')
 %matplotlib inline
-IMAGE_PATH = Path("/etlstage/PEE_joint/mine/image_data")
+# IMAGE_PATH = Path("/etlstage/PEE_joint/mine/image_data")
 # %%
 nltk.data.path.append("/home/hdfsf10n/nltk_data")
 nltk.data.path
@@ -26,25 +27,44 @@ from src.utils.data_loader import get_loader
 # %%
 with open('./data/vaild_dataset.json', 'r') as outfile:
   product_info = pd.read_json(json.load(outfile), orient="records")
-  
-product_info["file_loc"] = product_info["file_name"].apply(lambda file_name : IMAGE_PATH/file_name)
+print(product_info.shape)
+# product_info["imageURLHighRes"] = product_info["file_name"].apply(lambda file_name : IMAGE_PATH/file_name)
 
 import re
 def get_space_len(s):
   return len(max(re.findall(' +', s), key=len, default=[0]))
 
-
+# print(product_info["perCategory"].unique())
 product_info = product_info[product_info.valid == True]
 product_info = product_info[product_info["perCategory"].isin(["AMAZON_FASHION", 'All_Beauty',
-                                                              'Cell_Phones_and_Accessories',
-                                                               'Toys_and_Games','Luxury_Beauty',
+                                                               'Toys_and_Games','Office_Products',
                                                               'Home_and_Kitchen','Electronics',
-                                                              'Grocery_and_Gourmet_Food',
-                                                              'Automotive', 'Office_Products', 
                                                               'Clothing_Shoes_and_Jewelry'])]
-# product_info = product_info.explode("description").where(
-#     (product_info["description"].str.len()>5) & 
-#     (product_info["description"].astype(str).apply(get_space_len)<4)).dropna().reset_index(drop=True)
+
+
+# array(['AMAZON_FASHION', 'All_Beauty', 'Appliances',
+#        'Arts_Crafts_and_Sewing', 'Automotive', 'Books', 'CDs_and_Vinyl',
+#        'Cell_Phones_and_Accessories', 'Clothing_Shoes_and_Jewelry',
+#        'Digital_Music', 'Electronics', 'Gift_Cards',
+#        'Grocery_and_Gourmet_Food', 'Home_and_Kitchen',
+#        'Industrial_and_Scientific', 'Luxury_Beauty',
+#        'Magazine_Subscriptions', 'Movies_and_TV', 'Musical_Instruments',
+#        'Office_Products', 'Patio_Lawn_and_Garden', 'Pet_Supplies',
+#        'Prime_Pantry', 'Software', 'Sports_and_Outdoors',
+#        'Tools_and_Home_Improvement', 'Toys_and_Games', 'Video_Games'],
+#       dtype=object)
+
+# product_info = product_info[product_info["perCategory"].isin(["AMAZON_FASHION", 'All_Beauty',
+#                                                                 'Cell_Phones_and_Accessories',
+#                                                                 'Toys_and_Games','Luxury_Beauty',
+#                                                                 'Home_and_Kitchen','Electronics',
+#                                                                 'Grocery_and_Gourmet_Food',
+#                                                                 'Automotive','Office_Products',
+#                                                                 'Clothing_Shoes_and_Jewelry'])]
+
+print(product_info["perCategory"].unique())
+
+product_info["file_name"] = product_info["imageURLHighRes"].str.split("/").str[-1]
 
 product_info = product_info.explode("description")
 product_info["description"] = product_info["description"].str.split(".")
@@ -57,12 +77,14 @@ product_info = product_info[product_info['sentence_index'] <= product_info["desc
 print(product_info.shape)
 product_info.head(5)
 # %%
-product_info["perCategory"].unique()
+for descript in product_info.loc[:100,"description"]:
+    print("="*100)
+    print(descript)
 # %%
 import random
 idex = random.randint(0, product_info.shape[0])
 # img_url = product_info.loc[idex,"imageURLHighRes"]
-img_loc = product_info.loc[idex,"file_loc"]
+img_loc = product_info.loc[idex,"imageURLHighRes"]
 caption = product_info.loc[idex,"description"]
 Category = product_info.loc[idex,["perCategory", "sentence_index"]]
 print(caption)
@@ -75,7 +97,7 @@ plt.imshow(I)
 from torchvision import transforms
 from sklearn.preprocessing import OneHotEncoder
 
-image_dict = product_info["file_loc"].to_dict()
+image_dict = product_info["imageURLHighRes"].to_dict()
 caption_dict = product_info["description"].to_dict()
 category_dict = product_info["perCategory"].to_dict()
 onehot_cat = OneHotEncoder().fit_transform(np.array([*category_dict.values()], dtype=object).reshape(-1, 1)).toarray()
@@ -113,7 +135,8 @@ from src.utils.data_loader import get_loader
 data_loader = get_loader(product_info,
                         transform=transform_train,
                         mode='train',
-                        image_type="file_loc",
+                        image_type="imageURLHighRes",
+                        caption_type="description",
                         batch_size=batch_size,
                         vocab_threshold=vocab_threshold,
                         vocab_from_file=False)
@@ -174,23 +197,29 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),                           # convert the PIL Image to a tensor
 ])
 
-test_data_loader = get_loader(test_df,
-                              image_type="file_loc",
+test_data_loader = get_loader(train_df,
+                              image_type="imageURLHighRes",
+                              caption_type="description",
                               transform=transform_test,
                               batch_size=1,
                               mode='test')
 # %%
+len(set(category_dict.values())) + len(set(sentence_id_dict.values()))
 # %%
-current_time = "2022-03-31-13-28-48"
-encoder_file = 'encoder-57.pkl' 
-decoder_file = 'decoder-57.pkl'
+# current_time = "latest_model"
+# encoder_file = 'encoder-57.pkl' 
+# decoder_file = 'decoder-57.pkl'
+
+current_time = "2022-04-01-17-33-44"
+encoder_file = 'encoder-7.pkl' 
+decoder_file = 'decoder-7.pkl'
 
 embed_size = 125           # dimensionality of image and word embeddings
 hidden_size = 512          # number of features in hidden state of the RNN decoder
 num_features = 2048        # number of feature maps, produced by Encoder
 
 # The size of the vocabulary.
-vocab_size = 3682#len(test_data_loader.dataset.vocab)
+vocab_size = 2470#len(test_data_loader.dataset.vocab)
 
 # Initialize the encoder and decoder, and set each to inference mode.
 encoder = EncoderCNN()
@@ -203,8 +232,8 @@ decoder = DecoderRNN(num_features = num_features,
 decoder.eval()
 
 # Load the trained weights.
-encoder.load_state_dict(torch.load(os.path.join(f'/etlstage/PEE_joint/mine/models_new/{current_time}', encoder_file), map_location='cpu'))
-decoder.load_state_dict(torch.load(os.path.join(f'/etlstage/PEE_joint/mine/models_new/{current_time}', decoder_file), map_location='cpu'))
+encoder.load_state_dict(torch.load(os.path.join(f'../models_new/{current_time}', encoder_file), map_location='cpu'))
+decoder.load_state_dict(torch.load(os.path.join(f'../models_new/{current_time}', decoder_file), map_location='cpu'))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -220,13 +249,13 @@ def clean_sentence(output, data_loader):
     
     return sentence
 
-def get_prediction(data_loader):
+def get_prediction(data_loader, df):
     print("="*20)
     orig_image, image, cat_onehot, seq_onehot, caption= next(iter(data_loader))
     plt.imshow(orig_image.squeeze())
     plt.title(caption)
     plt.show()
-    file_name = test_df[test_df["description"] == caption[0]]["file_name"].values[0]
+    file_name = df[df["description"] == caption[0]]["file_name"].values[0]
     image = image.to(device)
     #display(test_df[(test_df["file_name"]==file_name)])
     for sentence_id in range(6):
@@ -240,11 +269,11 @@ def get_prediction(data_loader):
         features = encoder(image)
         output, atten_weights = decoder.greedy_search(features, onehot)    
         sentence = clean_sentence(output,data_loader)
-        print(test_df[(test_df["file_name"]==file_name) & (test_df["sentence_index"]==sentence_id)]["description"].values)
-        print(sentence)
+        print(df[(df["file_name"]==file_name) & (df["sentence_index"]==sentence_id)]["description"].values)
+        print(sentence.replace("<unk>", ""))
 # %%
 for i in range(1):
-    get_prediction(test_data_loader)|
+    get_prediction(test_data_loader, train_df)
 # %%
 
 # %%
