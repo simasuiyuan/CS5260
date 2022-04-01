@@ -1,6 +1,5 @@
 # Colossalai and LR Range Test Report
 ## training framework: Colossalai
-## source code: 
 
 ## 1. Exponentially increase the Learning rate (base)
 ### Learning rate
@@ -67,4 +66,4 @@
 
 <img src=".\images\7_legend.PNG" alt="7_legend" width="150" align="left"/><img src=".\images\compare3bestTestLoss.PNG" alt="compare3bestTestLoss" width="550"/>
 
-# github link: 
+# github link: https://github.com/simasuiyuan/CS5260.git
