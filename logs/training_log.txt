@@ -1,3 +1,0 @@
-Epoch train: [0/200], Step train: [1/815], Loss train: 7.9776, Perplexity train: 2914.9494
-Epoch train: [0/200], Step train: [2/815], Loss train: 7.8384, Perplexity train: 2536.2499
-Epoch train: [0/200], Step train: [3/815], Loss train: 7.6778, Perplexity train: 2159.8900

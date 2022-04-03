@@ -20,8 +20,10 @@ from src.utils.vocabulary import Vocabulary
 def get_loader(
   source:Union[dict, pd.DataFrame],
   transform,
+  onehot_cat_encoder,
   mode='train',
   # default batch size
+  onehot_seq_encoder=None,
   image_type="imageURL",
   caption_type="description",
   sentence_index = "sentence_index",
@@ -85,7 +87,9 @@ def get_loader(
     end_word, 
     unk_word, 
     vocab_from_file,
-    sentence_id_dict=sentence_id_dict)
+    onehot_cat_encoder,
+    sentence_id_dict=sentence_id_dict,
+    onehot_seq_encoder = onehot_seq_encoder)
 
   if mode == 'train' or mode == 'valid':
       # Randomly sample a caption length and indices of that length
@@ -109,15 +113,15 @@ def get_loader(
 class myDataset(data.Dataset):
   def __init__(self, image_dict, caption_dict, category_dict, transform, 
   mode, batch_size, vocab_threshold, vocab_file, start_word, 
-  end_word, unk_word, vocab_from_file,sentence_id_dict=None):
+  end_word, unk_word, vocab_from_file,onehot_cat_encoder,sentence_id_dict=None, onehot_seq_encoder=None):
     self.image_dict = image_dict
     self.caption_dict = caption_dict
     self.category_dict = category_dict
     self.sentence_id_dict = sentence_id_dict
     #onehot encode the category data
-    self.onehot_enc_cat = OneHotEncoder(handle_unknown='ignore').fit(np.array([*category_dict.values()], dtype=object).reshape(-1, 1))
+    self.onehot_cat_encoder = onehot_cat_encoder
     if sentence_id_dict is not None:
-          self.onehot_enc_seq = OneHotEncoder(handle_unknown='ignore').fit(np.array([*sentence_id_dict.values()], dtype=object).reshape(-1, 1))
+      self.onehot_seq_encoder = onehot_seq_encoder
           
     self.transform = transform
     self.mode = mode
@@ -153,12 +157,12 @@ class myDataset(data.Dataset):
       image = self.transform(image)
 
       # image pre-processed with tranformer applied
-      onehot_cat = torch.Tensor(self.onehot_enc_cat.transform(
+      onehot_cat = torch.Tensor(self.onehot_cat_encoder.transform(
         np.array(self.category_dict[index], 
         dtype=object).reshape(-1, 1)).toarray()).long()
       
       if self.sentence_id_dict is not None:
-            onehot_seq = torch.Tensor(self.onehot_enc_seq.transform(
+            onehot_seq = torch.Tensor(self.onehot_seq_encoder.transform(
               np.array(self.sentence_id_dict[index], 
                        dtype=object).reshape(-1, 1)).toarray()).long()
 
@@ -181,12 +185,12 @@ class myDataset(data.Dataset):
       image = Image.fromarray(io.imread(img_url)).convert('RGB')
       image = self.transform(image)
       
-      onehot_cat = torch.Tensor(self.onehot_enc_cat.transform(
+      onehot_cat = torch.Tensor(self.onehot_cat_encoder.transform(
         np.array(self.category_dict[index], 
         dtype=object).reshape(-1, 1)).toarray()).long()
       
       if self.sentence_id_dict is not None:
-            onehot_seq = torch.Tensor(self.onehot_enc_seq.transform(
+            onehot_seq = torch.Tensor(self.onehot_seq_encoder.transform(
               np.array(self.sentence_id_dict[index], 
                        dtype=object).reshape(-1, 1)).toarray()).long()
 
@@ -210,12 +214,12 @@ class myDataset(data.Dataset):
       orig_image = np.array(PIL_image)
       image = self.transform(PIL_image)
       
-      onehot_cat = torch.Tensor(self.onehot_enc_cat.transform(
+      onehot_cat = torch.Tensor(self.onehot_cat_encoder.transform(
         np.array(self.category_dict[index], 
         dtype=object).reshape(-1, 1)).toarray()).long()
       
       if self.sentence_id_dict is not None:
-            onehot_seq = torch.Tensor(self.onehot_enc_seq.transform(
+            onehot_seq = torch.Tensor(self.onehot_seq_encoder.transform(
               np.array(self.sentence_id_dict[index], 
                        dtype=object).reshape(-1, 1)).toarray()).long()
       # return original image and pre-processed image tensor

@@ -139,7 +139,7 @@ data_loader = get_loader(product_info,
                         caption_type="description",
                         batch_size=batch_size,
                         vocab_threshold=vocab_threshold,
-                        vocab_from_file=False)
+                        vocab_from_file=True)
 
 print('The shape of first image:', data_loader.dataset[0][0].shape)
 print('Total number of tokens in vocabulary:', len(data_loader.dataset.vocab))
@@ -180,7 +180,7 @@ from nltk.translate.bleu_score import corpus_bleu
 %autoreload
 from src.utils.data_loader import get_loader
 from src.models.CNN_Encoder import EncoderCNN
-from src.models.RNN_Decoder import DecoderRNN
+from src.models.RNN_decoder_catAttention import DecoderRNN
 from src.models.MLP_Encoder import MlpEncoder
 from src.utils.utils_trainer import get_batch_caps, get_hypothesis, adjust_learning_rate
 
@@ -197,7 +197,7 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),                           # convert the PIL Image to a tensor
 ])
 
-test_data_loader = get_loader(train_df,
+test_data_loader = get_loader(test_df,
                               image_type="imageURLHighRes",
                               caption_type="description",
                               transform=transform_test,
@@ -210,16 +210,16 @@ len(set(category_dict.values())) + len(set(sentence_id_dict.values()))
 # encoder_file = 'encoder-57.pkl' 
 # decoder_file = 'decoder-57.pkl'
 
-current_time = "2022-04-01-17-33-44"
-encoder_file = 'encoder-7.pkl' 
-decoder_file = 'decoder-7.pkl'
+current_time = "2022-04-02-02-25-40"
+encoder_file = 'encoder-61.pkl' 
+decoder_file = 'decoder-61.pkl'
 
 embed_size = 125           # dimensionality of image and word embeddings
 hidden_size = 512          # number of features in hidden state of the RNN decoder
 num_features = 2048        # number of feature maps, produced by Encoder
 
 # The size of the vocabulary.
-vocab_size = 2470#len(test_data_loader.dataset.vocab)
+vocab_size = 2435#len(test_data_loader.dataset.vocab)
 
 # Initialize the encoder and decoder, and set each to inference mode.
 encoder = EncoderCNN()
@@ -228,14 +228,15 @@ decoder = DecoderRNN(num_features = num_features,
                      embedding_dim = embed_size,
                      category_dim = len(set(category_dict.values())) + len(set(sentence_id_dict.values())),
                      hidden_dim = hidden_size, 
-                     vocab_size = vocab_size)
+                     vocab_size = vocab_size,
+                     cat_attention=True)
 decoder.eval()
 
 # Load the trained weights.
 encoder.load_state_dict(torch.load(os.path.join(f'../models_new/{current_time}', encoder_file), map_location='cpu'))
 decoder.load_state_dict(torch.load(os.path.join(f'../models_new/{current_time}', decoder_file), map_location='cpu'))
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cuda"
 
 # Move models to GPU if CUDA is available.
 encoder.to(device)
@@ -263,6 +264,7 @@ def get_prediction(data_loader, df):
                                                                             dtype=object).reshape(-1, 1)).toarray()).long()
         seq_onehot.to(device)
         print(sentence_id)
+        print(seq_onehot)
         onehot = torch.cat((cat_onehot.view(1,-1), 
                             seq_onehot.view(1,-1)), 1).type('torch.FloatTensor').view(1,-1).to(device)
         
@@ -270,10 +272,13 @@ def get_prediction(data_loader, df):
         output, atten_weights = decoder.greedy_search(features, onehot)    
         sentence = clean_sentence(output,data_loader)
         print(df[(df["file_name"]==file_name) & (df["sentence_index"]==sentence_id)]["description"].values)
-        print(sentence.replace("<unk>", ""))
+        print(sentence)
+        #print(sentence.replace("<unk>", ""))
+
 # %%
-for i in range(1):
-    get_prediction(test_data_loader, train_df)
-# %%
+for i in range(4):
+    get_prediction(test_data_loader, test_df)
+
+ # %%
 
 # %%

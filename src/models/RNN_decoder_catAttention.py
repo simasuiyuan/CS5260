@@ -30,7 +30,10 @@ class DecoderRNN(nn.Module):
         # LSTM will have a single layer of size 512 (512 hidden units)
         # it will input concatinated context vector (produced by attention)
         # and corresponding hidden state of Decoder
-        self.lstm = nn.LSTMCell(embedding_dim + num_features + category_dim, hidden_dim)
+        if cat_attention:
+            self.lstm = nn.LSTMCell(embedding_dim + num_features + category_dim*2, hidden_dim)
+        else:
+            self.lstm = nn.LSTMCell(embedding_dim + num_features, hidden_dim)
         # produce the final output
         self.fc = nn.Linear(hidden_dim, vocab_size)
 
@@ -77,14 +80,13 @@ class DecoderRNN(nn.Module):
         if self.cat_attention:
             # print(features.size())
             # print(features.size()[1])
-            # # print(category_enc.size)
+            # print(category_enc.size())
             # # print(category_enc.repeat(1,features.size()[1],1).size())
             # # category_enc
             new_cat_size = (category_enc.size()[0], features.size()[1], self.category_dim)
-            category_enc = category_enc.unsqueeze(2).repeat(1,1,features.size()[1]).reshape(new_cat_size)
+            category_enc_att = category_enc.unsqueeze(2).repeat(1,1,features.size()[1]).reshape(new_cat_size)
 
-            features = torch.cat([features, category_enc], 2)
-
+            features = torch.cat([features, category_enc_att], 2)
         h, c = self.init_hidden(features)
         seq_len = captions.size(1)
         feature_size = features.size(1)
@@ -104,10 +106,11 @@ class DecoderRNN(nn.Module):
             context, atten_weight = self.attention(features, h)
             # input_concat shape at time step t = (batch, embedding_dim + hidden_dim)
             
-            if self.cat_attention:
-                input_concat = torch.cat([word_embed, context], 1)
-            else:
-                input_concat = torch.cat([word_embed, context, category_enc], 1)
+            # if self.cat_attention:
+            #     input_concat = torch.cat([word_embed, context], 1)
+            # else:
+            #     input_concat = torch.cat([word_embed, context, category_enc], 1)
+            input_concat = torch.cat([word_embed, context, category_enc], 1)
 
             h, c = self.lstm(input_concat, (h,c))
             h = self.drop(h)
@@ -156,14 +159,21 @@ class DecoderRNN(nn.Module):
         input_word = torch.tensor(0).unsqueeze(0).to(device)
 
         if self.cat_attention:
-            features = torch.cat([features, category_enc], 1)
+            new_cat_size = (category_enc.size()[0], features.size()[1], category_enc.size()[1])
+            category_enc_att = category_enc.unsqueeze(2).repeat(1,1,features.size()[1]).reshape(new_cat_size)
+            features = torch.cat([features, category_enc_att], 2)
             
         h, c = self.init_hidden(features)
         while True:
             embedded_word = self.embeddings(input_word)
             context, atten_weight = self.attention(features, h)
             # input_concat shape at time step t = (batch, embedding_dim + context size)
-            input_concat = torch.cat([embedded_word, context, category_enc],  dim = 1)
+            # if self.cat_attention:
+            #     input_concat = torch.cat([embedded_word, context], 1)
+            # else:
+            #     input_concat = torch.cat([embedded_word, context, category_enc], 1)
+
+            input_concat = torch.cat([embedded_word, context, category_enc], 1)
             h, c = self.lstm(input_concat, (h,c))
             h = self.drop(h)
             output = self.fc(h)
